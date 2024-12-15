@@ -212,8 +212,7 @@ async def upload_payment_proof(
         )
         cursor = cnx.cursor()
 
-        # Guardar la URL del archivo en S3 directamente en la base de datos
-        payment_proof_url = f"s3://{S3_BUCKET_NAME}/{unique_filename}"
+        payment_proof_url = f"{unique_filename}"
         query = """
             INSERT INTO payments (aztlan_id, payment_proof, created_at)
             VALUES (%s, %s, %s)
@@ -221,7 +220,6 @@ async def upload_payment_proof(
         cursor.execute(query, (aztlan_id, payment_proof_url, datetime.utcnow()))
         cnx.commit()
 
-        # Cerrar la conexión
         cursor.close()
         cnx.close()
 
@@ -230,6 +228,35 @@ async def upload_payment_proof(
     except Exception as e:
         logger.error(f"Error al subir comprobante de pago: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
+
+@app.get("/participants/{aztlan_id}/payment-proof-url")
+async def get_payment_proof_url(aztlan_id: str):
+    try:
+        cnx = mysql.connector.connect(
+            host='database-aztlan.c5sk4swwkhp4.us-east-1.rds.amazonaws.com',
+            user='admin',
+            password='d4nt3r4d',
+            database='database_aztlan'
+        )
+        cursor = cnx.cursor(dictionary=True)
+
+        query = "SELECT payment_proof FROM payments WHERE aztlan_id = %s"
+        cursor.execute(query, (aztlan_id,))
+        db_result = cursor.fetchone()
+
+        if db_result is None or db_result['payment_proof'] is None:
+            return JSONResponse(content={"message": f"No payment proof found for participant {aztlan_id}"}, status_code=404)
+
+        payment_proof_filename = db_result['payment_proof']
+
+        base_url = "https://aztlang-grappling-images.s3.us-east-1.amazonaws.com/"
+        payment_proof_url = f"{base_url}{payment_proof_filename}"
+
+        return {"payment_proof_url": payment_proof_url}
+    
+    except Exception as e:
+        logging.error(f"Error: {e}")
+        return JSONResponse(content={"error": "Internal Server Error"}, status_code=500)
 
 @app.get("/")
 async def hello():
