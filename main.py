@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, UploadFile, Body, Request
+from fastapi.middleware.cors import CORSMiddleware
 from mangum import Mangum
 from models import ParticipantCreate, ParticipantResponse
 from datetime import datetime
@@ -16,12 +17,21 @@ logger.setLevel(logging.INFO)
 s3_client = boto3.client('s3')
 S3_BUCKET_NAME = 'aztlang-grappling-images'
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # o puedes usar ["http://localhost:3000"] para restringirlo a tu localhost
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 @app.post("/participants")
 async def register_participant(participant: ParticipantCreate):
     generated_id = uuid4()
     generated_id_str = str(generated_id)
     short_id = generated_id_str[:6]
     aztlan_id = f"{short_id}"
+    logger.info(f"Registrando participante con ID {aztlan_id}")
 
     try:
         # Conexión a MySQL
@@ -115,7 +125,8 @@ async def get_all_participants():
                 "height": row[6],
                 "category": row[7],
                 "payment_proof": row[8],
-                "created_at": row[9]
+                "created_at": row[9],
+                "is_payment_complete": row[10]
             }
             for row in participants
         ]
@@ -293,7 +304,3 @@ async def update_payment_status(aztlan_id: str, is_payment_complete: int):
 
     except mysql.connector.Error as err:
         return {"error": f"Database error: {err}"}
-
-@app.get("/")
-async def hello():
-    return "si entre" 
