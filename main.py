@@ -5,10 +5,12 @@ from datetime import datetime
 from uuid import uuid4
 from fastapi.responses import JSONResponse
 import mysql.connector
-
+import logging
 
 app = FastAPI()
 handler = Mangum(app)
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 @app.post("/participants")
 async def register_participant(participant: ParticipantCreate):
@@ -77,6 +79,50 @@ async def read_participant(participant_id: str):
         cnx.close()
 
         return ParticipantResponse(**db_participant)
+
+    except mysql.connector.Error as err:
+        return JSONResponse(content={"error": f"Error de base de datos: {err}"}, status_code=500)
+
+@app.get("/participants")
+async def get_all_participants():
+    try:
+        # Conexión a MySQL
+        cnx = mysql.connector.connect(
+            host='database-aztlan.c5sk4swwkhp4.us-east-1.rds.amazonaws.com',
+            user='admin',
+            password='d4nt3r4d',
+            database='database_aztlan'
+        )
+        cursor = cnx.cursor()
+
+        query = "SELECT * FROM participants"
+        cursor.execute(query)
+
+        # Obtener todos los participantes
+        participants = cursor.fetchall()
+        logger.info(f"Se encontraron {len(participants)} participantes en la base de datos.")
+
+        # Convertir resultados a una lista de diccionarios
+        participants_list = [
+            {
+                "id": row[0],
+                "aztlan_id": row[1],
+                "name": row[2],
+                "birth_date": row[3],
+                "weight": row[4],
+                "academy": row[5],
+                "height": row[6],
+                "category": row[7],
+                "payment_proof": row[8],
+                "created_at": row[9]
+            }
+            for row in participants
+        ]
+
+        cursor.close()
+        cnx.close()
+
+        return participants_list
 
     except mysql.connector.Error as err:
         return JSONResponse(content={"error": f"Error de base de datos: {err}"}, status_code=500)
