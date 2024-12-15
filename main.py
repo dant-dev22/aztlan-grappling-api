@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile
+from fastapi import FastAPI, HTTPException, UploadFile, Body, Request
 from mangum import Mangum
 from models import ParticipantCreate, ParticipantResponse
 from datetime import datetime
@@ -220,6 +220,7 @@ async def upload_payment_proof(
         cursor.execute(query, (aztlan_id, payment_proof_url, datetime.utcnow()))
         cnx.commit()
 
+        # Cerrar la conexión
         cursor.close()
         cnx.close()
 
@@ -240,6 +241,7 @@ async def get_payment_proof_url(aztlan_id: str):
         )
         cursor = cnx.cursor(dictionary=True)
 
+        # Buscar el valor de payment_proof en la tabla payments
         query = "SELECT payment_proof FROM payments WHERE aztlan_id = %s"
         cursor.execute(query, (aztlan_id,))
         db_result = cursor.fetchone()
@@ -247,8 +249,10 @@ async def get_payment_proof_url(aztlan_id: str):
         if db_result is None or db_result['payment_proof'] is None:
             return JSONResponse(content={"message": f"No payment proof found for participant {aztlan_id}"}, status_code=404)
 
+        # Obtener el nombre del archivo de la base de datos
         payment_proof_filename = db_result['payment_proof']
 
+        # Construir la URL pública del archivo en S3
         base_url = "https://aztlang-grappling-images.s3.us-east-1.amazonaws.com/"
         payment_proof_url = f"{base_url}{payment_proof_filename}"
 
@@ -257,6 +261,38 @@ async def get_payment_proof_url(aztlan_id: str):
     except Exception as e:
         logging.error(f"Error: {e}")
         return JSONResponse(content={"error": "Internal Server Error"}, status_code=500)
+
+@app.put("/participants/{aztlan_id}/payment-status/{is_payment_complete}")
+async def update_payment_status(aztlan_id: str, is_payment_complete: int):
+    if is_payment_complete not in [0, 1]:
+        raise HTTPException(status_code=400, detail="Invalid value for is_payment_complete. Must be 0 or 1.")
+
+    try:
+        # Conexión a MySQL
+        cnx = mysql.connector.connect(
+            host='database-aztlan.c5sk4swwkhp4.us-east-1.rds.amazonaws.com',
+            user='admin',
+            password='d4nt3r4d',
+            database='database_aztlan'
+        )
+        cursor = cnx.cursor()
+
+        # Actualizar el campo is_payment_complete en la base de datos
+        query = """
+        UPDATE participants
+        SET is_payment_complete = %s
+        WHERE aztlan_id = %s
+        """
+        cursor.execute(query, (is_payment_complete, aztlan_id))
+        cnx.commit()
+
+        cursor.close()
+        cnx.close()
+
+        return {"message": "Payment status updated successfully"}
+
+    except mysql.connector.Error as err:
+        return {"error": f"Database error: {err}"}
 
 @app.get("/")
 async def hello():
