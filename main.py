@@ -86,7 +86,6 @@ async def read_participant(participant_id: str):
 @app.get("/participants")
 async def get_all_participants():
     try:
-        # Conexión a MySQL
         cnx = mysql.connector.connect(
             host='database-aztlan.c5sk4swwkhp4.us-east-1.rds.amazonaws.com',
             user='admin',
@@ -98,11 +97,9 @@ async def get_all_participants():
         query = "SELECT * FROM participants"
         cursor.execute(query)
 
-        # Obtener todos los participantes
         participants = cursor.fetchall()
         logger.info(f"Se encontraron {len(participants)} participantes en la base de datos.")
 
-        # Convertir resultados a una lista de diccionarios
         participants_list = [
             {
                 "id": row[0],
@@ -125,6 +122,43 @@ async def get_all_participants():
         return participants_list
 
     except mysql.connector.Error as err:
+        return JSONResponse(content={"error": f"Error de base de datos: {err}"}, status_code=500)
+
+@app.delete("/participants/{participant_id}")
+async def delete_participant(participant_id: str):
+    logger.info(f"Eliminando participante con ID {participant_id}")
+    try:
+        cnx = mysql.connector.connect(
+            host='database-aztlan.c5sk4swwkhp4.us-east-1.rds.amazonaws.com',
+            user='admin',
+            password='d4nt3r4d',
+            database='database_aztlan'
+        )
+        cursor = cnx.cursor()
+
+        select_query = "SELECT * FROM participants WHERE aztlan_id = %s"
+        cursor.execute(select_query, (participant_id,))
+        participant = cursor.fetchone()
+
+        if not participant:
+            logger.warning(f"Participante con ID {participant_id} no encontrado para eliminar")
+            cursor.close()
+            cnx.close()
+            return JSONResponse(content={"message": "Participant not found"}, status_code=404)
+
+        delete_query = "DELETE FROM participants WHERE aztlan_id = %s"
+        cursor.execute(delete_query, (participant_id,))
+        cnx.commit()
+
+        logger.info(f"Participante con ID {participant_id} eliminado con éxito")
+
+        cursor.close()
+        cnx.close()
+
+        return JSONResponse(content={"message": "Participante eliminado con éxito", "participant_id": participant_id}, status_code=200)
+
+    except mysql.connector.Error as err:
+        logger.error(f"Error al eliminar participante con ID {participant_id}: {err}")
         return JSONResponse(content={"error": f"Error de base de datos: {err}"}, status_code=500)
 
 @app.get("/")
