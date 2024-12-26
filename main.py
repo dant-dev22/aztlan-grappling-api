@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, Body, Request
+from fastapi import FastAPI, HTTPException, UploadFile, Body, Request, File
 from fastapi.middleware.cors import CORSMiddleware
 from mangum import Mangum
 from models import ParticipantCreate, ParticipantResponse
@@ -19,7 +19,7 @@ S3_BUCKET_NAME = 'aztlang-grappling-images'
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # o puedes usar ["http://localhost:3000"] para restringirlo a tu localhost
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -179,7 +179,7 @@ async def delete_participant(participant_id: str):
 @app.post("/participants/{aztlan_id}/upload")
 async def upload_payment_proof(
     aztlan_id: str,
-    file: UploadFile,
+    file: UploadFile = File(...),
 ):
     logger.info(f"Subiendo comprobante de pago para el participante {aztlan_id}")
     
