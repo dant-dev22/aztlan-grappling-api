@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, Body, Request, File
 from fastapi.middleware.cors import CORSMiddleware
 from mangum import Mangum
 from models import ParticipantCreate, ParticipantResponse
+from email_service import email_sender
 from datetime import datetime
 from uuid import uuid4
 from fastapi.responses import JSONResponse
@@ -66,9 +67,29 @@ async def register_participant(participant: ParticipantCreate):
         cursor.close()
         cnx.close()
 
-        return JSONResponse(content={"message": "Participante registrado con éxito", "aztlan_id": aztlan_id}, status_code=201)
+        try:
+            subject = "Registro Aztlan Grappling"
+            body = (
+                f"Felicidades, tu registro se ha iniciado con éxito.\n\n"
+                f"Conserva tu Aztlan ID: {aztlan_id} para completar tu registro subiendo tu comprobante de pago.\n\n"
+                f"¡Gracias por participar!"
+            )
+            email_sender(subject, body, participant.email)
+            logger.info(f"Correo enviado a {participant.email}")
+        except Exception as email_error:
+            logger.error(f"Error al enviar correo: {email_error}")
+            return JSONResponse(
+                content={"message": "Participante registrado, pero no se pudo enviar el correo.", "aztlan_id": aztlan_id},
+                status_code=201
+            )
+
+        return JSONResponse(
+            content={"message": "Participante registrado con éxito y correo enviado.", "aztlan_id": aztlan_id},
+            status_code=201
+        )
 
     except mysql.connector.Error as err:
+        logger.error(f"Error al registrar en la base de datos: {err}")
         return JSONResponse(content={"error": f"Error de base de datos: {err}"}, status_code=500)
 
 @app.get("/participants/{participant_id}", response_model=ParticipantResponse)
